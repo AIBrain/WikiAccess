@@ -1,90 +1,71 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.IO;
+﻿namespace WikiAccess {
 
-namespace WikiAccess
-{
-    /// <summary>
-    /// Class to create a cache of property labels, cutting down on Wikidata traffic.
-    /// </summary>
-    class WikidataCache
-    {
-        Dictionary<int, string> _Cache = new Dictionary<int, string>();
-        private readonly string LABELCACHE = Path.GetTempPath() + "WikidataLabelCache";
+    using System;
+    using System.Collections.Concurrent;
+    using System.IO;
+
+    /// <summary>Class to create a cache of property labels, cutting down on Wikidata traffic.</summary>
+    internal class WikidataCache {
+        private readonly ConcurrentDictionary<int, string> _cache = new ConcurrentDictionary<int, string>();
+        private readonly string _labelcache = Path.GetTempPath() + "WikidataLabelCache";
 
         /// <summary>
-        /// Constructor. Reads in existing cache from LABELCACHE
-        /// TODO Error trap for dodgy cache.
+        /// Constructor. Reads in existing cache from LABELCACHE TODO Error trap for dodgy cache.
         /// </summary>
-        public WikidataCache()
-        {
-            if (!File.Exists(LABELCACHE))
-                File.Create(LABELCACHE).Close();
+        public WikidataCache() {
+            if ( !File.Exists( this._labelcache ) ) {
+                File.Create( this._labelcache ).Close();
+            }
 
-            if (_Cache.Count == 0)
-            {
-                using (StreamReader Sr = new StreamReader(LABELCACHE))
-                {
-                    string PropertyAsString;
-                    int Property;
-                    while ((PropertyAsString = Sr.ReadLine()) != null)
-                    {
-                        Property = Convert.ToInt32(PropertyAsString);
-                        string Description = Sr.ReadLine();
-                        _Cache.Add(Property, Description);
+            if ( this._cache.Count == 0 ) {
+                using ( var sr = new StreamReader( this._labelcache ) ) {
+                    string propertyAsString;
+                    int property;
+                    while ( ( propertyAsString = sr.ReadLine() ) != null ) {
+                        property = Convert.ToInt32( propertyAsString );
+                        var description = sr.ReadLine();
+                        this._cache[ property ] = description;
                     }
                 }
             }
-
         }
 
-        public string RetrieveLabel(int qcode)
-        {
-            string Description = null;
-            if (_Cache.TryGetValue(qcode, out Description))
-            {
-                return Description;
+        public string RetrieveLabel( int qcode ) {
+            string description;
+            if ( this._cache.TryGetValue( qcode, out description ) ) {
+                return description;
             }
-            else
-            {
-                return LookupLabel(qcode);
-            }
+            return this.LookupLabel( qcode );
         }
 
-        /// <summary>
-        /// If its a new property, look up label on Wikidata and add to cache.
-        /// </summary>
+        /// <summary>If its a new property, look up label on Wikidata and add to cache.</summary>
         /// <param name="qcode"></param>
         /// <returns></returns>
-        private string LookupLabel(int qcode)
-        {
-            WikidataIO IO = new WikidataIO();
-            IO.Action = "wbgetentities";
-            IO.Format = "json";
-            IO.Ids = qcode;
-            IO.Props = "labels";
-            IO.Languages = "en|en-gb|ro";
-            WikidataFields Fields = new WikidataFields();
+        private string LookupLabel( int qcode ) {
+            var io = new WikidataIO {
+                Action = "wbgetentities",
+                Format = "json",
+                Ids = qcode,
+                Props = "labels",
+                Languages = "en|en-gb|ro"
+            };
+            var fields = io.GetData();
 
-            Fields = IO.GetData();
-
-            string Name = "";
-            if (!Fields.Labels.TryGetValue("en-gb", out  Name))
-                if (!Fields.Labels.TryGetValue("en", out  Name))
-                    Fields.Labels.TryGetValue("en", out  Name);
-
-            using (StreamWriter Sw = File.AppendText(LABELCACHE))
-            {
-                Sw.WriteLine(qcode);
-                Sw.WriteLine(Name);
+            string name;
+            if ( !fields.Labels.TryGetValue( "en-gb", out name ) ) {
+                if ( !fields.Labels.TryGetValue( "en", out name ) ) {
+                    fields.Labels.TryGetValue( "en", out name );
+                }
             }
 
-            _Cache.Add(qcode, Name);
+            using ( var sw = File.AppendText( this._labelcache ) ) {
+                sw.WriteLine( qcode );
+                sw.WriteLine( name );
+            }
 
-            return Name;
+            this._cache[ qcode ] = name;
+
+            return name;
         }
-
     }
 }

@@ -1,72 +1,93 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+﻿namespace WikiAccess {
 
-namespace WikiAccess
-{
-    /// <summary>
-    /// General interface to Wikidata
-    /// </summary>
-    public class WikidataIO : WikimediaApi
-    {
-        protected override string APIurl { get { return @"http://www.Wikidata.org/w/api.php?"; } }
-        protected override string Parameters
-        {
-            get
-            {
-                string Param = "action=" + Action;
-                if (Format != "") Param += "&format=" + Format;
-                if (Sites != "") Param += "&sites=" + Sites;
-                if (Ids != 0) Param += "&ids=Q" + Ids.ToString();
-                if (Props != "") Param += "&props=" + Props;
-                if (Languages != "") Param += "&languages=" + Languages;
+    using System.Collections.Generic;
 
-                return Param;
+    /// <summary>General interface to Wikidata</summary>
+    public class WikidataIO : WikimediaApi {
+
+        public string Action {
+            get; set;
+        }
+
+        public string[] ClaimsRequired {
+            get; set;
+        }
+
+        public string Format {
+            get; set;
+        }
+
+        public int Ids {
+            get; set;
+        }
+
+        public string Languages {
+            get; set;
+        }
+
+        public string Props {
+            get; set;
+        }
+
+        public string Sites {
+            get; set;
+        }
+
+        protected override string ApIurl {
+            get {
+                return @"http://www.Wikidata.org/w/api.php?";
             }
         }
-        private WikidataIOErrorLog WikidataErrors { get; set; }
-        private ErrorLog ExternalErrors { get; set; }
 
-        public string Action { get; set; }
-        public string Format { get; set; }
-        public string Sites { get; set; }
-        public int Ids { get; set; }
-        public string Props { get; set; }
-        public string Languages { get; set; }
-        public string[] ClaimsRequired { get; set; }
+        protected override string Parameters {
+            get {
+                var param = "action=" + Action;
+                if ( Format != "" ) {
+                    param += "&format=" + Format;
+                }
+                if ( Sites != "" ) {
+                    param += "&sites=" + Sites;
+                }
+                if ( Ids != 0 ) {
+                    param += "&ids=Q" + this.Ids;
+                }
+                if ( Props != "" ) {
+                    param += "&props=" + Props;
+                }
+                if ( Languages != "" ) {
+                    param += "&languages=" + Languages;
+                }
 
-        public WikidataIO()
-            : base()
-        {
+                return param;
+            }
+        }
+
+        private IErrorLog ExternalErrors {
+            get; set;
+        }
+
+        private WikidataIOErrorLog WikidataErrors {
+            get;
+        }
+
+        public WikidataIO() {
             WikidataErrors = new WikidataIOErrorLog();
         }
 
-        public WikidataFields GetData()
-        {
-            if (GrabPage())
-            {
-                WikidataExtract Item = new WikidataExtract(Content, ClaimsRequired);
-                ExternalErrors = Item.WikidataExtractErrors;
-                if (Item.Success)
-                    return Item.Fields;
-                else
-                    return null;
+        public WikidataFields GetData() {
+            if ( GrabPage() ) {
+                var item = new WikidataExtract( Content, ClaimsRequired );
+                ExternalErrors = item.WikidataExtractErrors;
+                return item.Success ? item.Fields : null;
             }
-            else
-            {
-                WikidataErrors.UnableToRetrieveData();
-                return null;
-            }
+            this.WikidataErrors.UnableToRetrieveData();
+            return null;
         }
 
-        public List<ErrorLog> GetErrors()
-        {
-            List<ErrorLog> Logs = new List<ErrorLog>();
-            Logs.Add(APIErrors);
-            Logs.Add(WikidataErrors);
-            Logs.Add(ExternalErrors);
-            return Logs;
+        public IEnumerable<IErrorLog> GetErrors() {
+            yield return APIErrors;
+            yield return WikidataErrors;
+            yield return ExternalErrors;
         }
     }
 }

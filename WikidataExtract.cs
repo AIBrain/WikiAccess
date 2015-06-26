@@ -1,244 +1,254 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Linq;
-using System.Text;
-using Newtonsoft.Json.Linq;    // https://github.com/JamesNK/Newtonsoft.Json
+﻿// https: //github.com/JamesNK/Newtonsoft.Json
 
-namespace WikiAccess
-{
+namespace WikiAccess {
+
+    using System;
+    using System.Collections.Generic;
+    using System.Globalization;
+    using System.Linq;
+    using Newtonsoft.Json.Linq;
+
     /// <summary>
-    /// Class to extract data from downloaded Wikidata
-    /// This could have been part of WikidataIO.cs, but split out as it is large and cumbersome
+    /// Class to extract data from downloaded Wikidata This could have been part of WikidataIO.cs,
+    /// but split out as it is large and cumbersome
     /// </summary>
-    class WikidataExtract
-    {
-        public WikidataFields Fields { get; set; }
-        private string Content { get; set; }
-        public string[] ClaimsRequired { get; set; }
-        private WikidataCache Cache = new WikidataCache();
-        public WikidataExtractErrorLog WikidataExtractErrors { get; set; }
-        public bool Success { get; set; }
+    internal class WikidataExtract {
+        private readonly WikidataCache _cache = new WikidataCache();
 
-        public WikidataExtract(string content, string[] claimsrequired)
-        {
+        public string[] ClaimsRequired {
+            get;
+        }
+
+        public WikidataFields Fields {
+            get;
+        }
+
+        public bool Success {
+            get;
+        }
+
+        public WikidataExtractErrorLog WikidataExtractErrors {
+            get;
+        }
+
+        private string Content {
+            get;
+        }
+
+        public WikidataExtract( string content, string[] claimsrequired ) {
             WikidataExtractErrors = new WikidataExtractErrorLog();
             ClaimsRequired = claimsrequired;
             Fields = new WikidataFields();
             Content = content;
-            Success = ExtractJSON();
+            Success = this.ExtractJson();
         }
 
-        /// <summary>
-        /// Note: This method requires Newtonsoft Json to be installed
-        /// </summary>
+        /// <summary>Note: This method requires Newtonsoft Json to be installed</summary>
         /// <returns></returns>
-        private bool ExtractJSON()
-        {
+        private bool ExtractJson() {
+
             //Interpret the JSON - Basically read in a level at a time.
-            var DataFromWiki = JObject.Parse(Content);
-            var Entities = (JObject)DataFromWiki["entities"];
+            var dataFromWiki = JObject.Parse( Content );
+            var entities = ( JObject )dataFromWiki[ "entities" ];
 
-            var Entity = Entities.Properties().First();   // Name is variable, so grab data by using first method
-            string EntityKey = Entity.Name;
+            var entity = entities.Properties().First(); // Name is variable, so grab data by using first method
+            var entityKey = entity.Name;
 
-            var EntityData = (JObject)Entity.Value;
+            var entityData = ( JObject )entity.Value;
 
-            if (EntityKey == "-1")
-            {
+            if ( entityKey == "-1" ) {
                 WikidataExtractErrors.NotWikidata();
                 return false;
             }
 
-            string Qcode = (string)EntityData["id"];
-            Fields.ID = Convert.ToInt32(Qcode.Substring(1));
-            string EntityType = (string)EntityData["type"];
+            var qcode = ( string )entityData[ "id" ];
+            Fields.ID = Convert.ToInt32( qcode.Substring( 1 ) );
+            var entityType = ( string )entityData[ "type" ];
 
-            if (EntityType == null)
-            {
-                WikidataExtractErrors.QcodeNotExist(EntityKey);
+            if ( entityType == null ) {
+                WikidataExtractErrors.QcodeNotExist( entityKey );
                 return false;
             }
 
-            var Descriptions = (JObject)EntityData["descriptions"];
-            var Labels = (JObject)EntityData["labels"];
-            var WikipediaLinks = (JObject)EntityData["sitelinks"];
+            var descriptions = ( JObject )entityData[ "descriptions" ];
+            var labels = ( JObject )entityData[ "labels" ];
+            var wikipediaLinks = ( JObject )entityData[ "sitelinks" ];
 
-            if (Labels != null)
-            {
-                foreach (var Label in Labels.Properties())
-                {
-                    var LabelData = (JObject)Label.Value;
-                    Fields.Labels.Add((string)LabelData["language"], (string)LabelData["value"]);
+            if ( labels != null ) {
+                foreach ( var labelData in labels.Properties().Select( label => ( JObject )label.Value ) ) {
+                    this.Fields.Labels.Add( ( string )labelData[ "language" ], ( string )labelData[ "value" ] );
                 }
             }
 
-            if (Descriptions != null)
-            {
-                foreach (var Description in Descriptions.Properties())
-                {
-                    var DescriptionData = (JObject)Description.Value;
-                    string l = (string)DescriptionData["language"];
-                    Fields.Description.Add((string)DescriptionData["language"], (string)DescriptionData["value"]);
+            if ( descriptions != null ) {
+                foreach ( var description in descriptions.Properties() ) {
+                    var descriptionData = ( JObject )description.Value;
+                    var key = ( string )descriptionData[ "language" ];
+                    Fields.Description.Add( key, ( string )descriptionData[ "value" ] );
                 }
             }
 
-            if (WikipediaLinks != null)
-            {
-                foreach (var WikipediaLink in WikipediaLinks.Properties())
-                {
-                    var WikipediaLinkData = (JObject)WikipediaLink.Value;
-                    Fields.WikipediaLinks.Add((string)WikipediaLinkData["site"], (string)WikipediaLinkData["title"]);
+            if ( wikipediaLinks != null ) {
+                foreach ( var wikipediaLinkData in wikipediaLinks.Properties().Select( wikipediaLink => ( JObject )wikipediaLink.Value ) ) {
+                    this.Fields.WikipediaLinks.Add( ( string )wikipediaLinkData[ "site" ], ( string )wikipediaLinkData[ "title" ] );
                 }
             }
 
-            var Claims = (JObject)EntityData["claims"];
-            if (Claims != null)
-            {
-                //Now we get to loop through each claim property for that article
-                foreach (var Claim in Claims.Properties())
-                {
-                    string ClaimKey = Claim.Name;
+            var claims = ( JObject )entityData[ "claims" ];
+            if ( claims == null ) {
+                return true;
+            }
 
-                    if (Array.IndexOf(ClaimsRequired, ClaimKey) == -1) continue;
+            //Now we get to loop through each claim property for that article
+            foreach ( var claim in claims.Properties() ) {
+                var claimKey = claim.Name;
 
-                    var ClaimData = (JArray)Claim.Value;
+                if ( Array.IndexOf( this.ClaimsRequired, claimKey ) == -1 ) {
+                    continue;
+                }
 
-                    for (int ThisClaim = 0; ThisClaim < ClaimData.Count(); ThisClaim++)
-                    {
-                        //claimData is an array - another loop
+                var claimData = ( JArray )claim.Value;
 
-                        WikidataClaim ThisClaimData = new WikidataClaim();
+                for ( var thisClaim = 0; thisClaim < claimData.Count(); thisClaim++ ) {
 
-                        var MainSnak = (JObject)ClaimData[ThisClaim]["mainsnak"];
-                        string SnakType = (string)MainSnak["snaktype"];
-                        string SnakDataType = (string)MainSnak["datatype"];
-                        var SnakDataValue = (JObject)MainSnak["datavalue"];
+                    //claimData is an array - another loop
 
-                        if (SnakType == "novalue" || SnakType == "somevalue")
-                        {
-                            ThisClaimData.ValueAsString = SnakType;
-                        }
-                        else
-                        {
-                            if (SnakDataType == "string" || SnakDataType == "commonsMedia" || SnakDataType == "url")
-                            {
-                                ThisClaimData.ValueAsString = (string)SnakDataValue["value"];
-                            }
-                            else if (SnakDataType == "wikibase-item")
-                            {
-                                var ObjectValue = (JObject)SnakDataValue["value"];
-                                ThisClaimData.Qcode = (int)ObjectValue["numeric-id"];
-                                ThisClaimData.ValueAsString = Cache.RetrieveLabel(ThisClaimData.Qcode);
+                    var thisClaimData = new WikidataClaim();
 
-                            }
-                            else if (SnakDataType == "time")
-                            {
-                                var ObjectValue = (JObject)SnakDataValue["value"];
+                    var mainSnak = ( JObject )claimData[ thisClaim ][ "mainsnak" ];
+                    var snakType = ( string )mainSnak[ "snaktype" ];
+                    var snakDataType = ( string )mainSnak[ "datatype" ];
+                    var snakDataValue = ( JObject )mainSnak[ "datavalue" ];
 
-                                string ValueTime = (string)ObjectValue["time"];
+                    if ( snakType == "novalue" || snakType == "somevalue" ) {
+                        thisClaimData.ValueAsString = snakType;
+                    }
+                    else {
+                        switch ( snakDataType ) {
+                            case "string":
+                            case "commonsMedia":
+                            case "url":
+                                thisClaimData.ValueAsString = ( string )snakDataValue[ "value" ];
+                                break;
 
-
-                                string ValueTimePrecision = (string)ObjectValue["precision"];
-                                string ValueTimeCalendarModel = (string)ObjectValue["calendarmodel"];
-
-                                bool Julian = false;
-                                bool Gregorian = false;
-
-                                if (ValueTimeCalendarModel != "http://www.Wikidata.org/entity/Q1985727")
-                                    Gregorian = true;
-                                if (ValueTimeCalendarModel == "http://www.Wikidata.org/entity/Q1985786")
-                                    Julian = true;
-
-                                if (ValueTimePrecision == "11" || ValueTimePrecision == "10" || ValueTimePrecision == "9"
-                                                               || ValueTimePrecision == "8" || ValueTimePrecision == "7" || ValueTimePrecision == "6")
+                            case "wikibase-item":
                                 {
-                                    int DateStart = ValueTime.IndexOf("-", 2) - 4;
-
-                                    string ThisDateString = (ValueTime.Substring(DateStart, 10));
-                                    ThisDateString = ThisDateString.Replace("-00", "-01");  // Occasionally get 1901-00-00 ?
-
-                                    bool ValidDate = true;
-                                    DateTime thisDate;
-                                    try
-                                    {
-                                        thisDate = DateTime.Parse(ThisDateString, null, DateTimeStyles.RoundtripKind);
-                                    }
-                                    catch
-                                    {
-                                        thisDate = DateTime.MinValue;
-                                        ValidDate = false;
-                                    }
-                                    if (Julian == true && ValueTimePrecision == "11")
-                                    {
-                                        // All dates will be Gregorian
-                                        // Julian flag tells us to display Julian date.
-                                        // JulianCalendar JulCal = new JulianCalendar();
-                                        // DateTime dta = JulCal.ToDateTime(thisDate.Year, thisDate.Month, thisDate.Day, 0, 0, 0, 0);
-                                        // thisDate = dta;
-                                    }
-
-                                    DatePrecision Precision = DatePrecision.Null;
-
-
-                                    if (ValidDate == false)
-                                    {
-                                        Precision = DatePrecision.Invalid;
-                                    }
-                                    else if (ValueTime.Substring(0, 1) == "+")
-                                    {
-                                        switch (ValueTimePrecision)
-                                        {
-                                            case "11":
-                                                Precision = DatePrecision.Day;
-                                                break;
-                                            case "10":
-                                                Precision = DatePrecision.Month;
-                                                break;
-                                            case "9":
-                                                Precision = DatePrecision.Year;
-                                                break;
-                                            case "8":
-                                                Precision = DatePrecision.Decade;
-                                                break;
-                                            case "7":
-                                                Precision = DatePrecision.Century;
-                                                break;
-                                            case "6":
-                                                Precision = DatePrecision.Millenium;
-                                                break;
-                                        }
-                                    }
-                                    else
-                                    {
-                                        Precision = DatePrecision.BCE;
-                                    }
-
-                                    ThisClaimData.ValueAsDateTime.thisDate = thisDate;
-                                    ThisClaimData.ValueAsDateTime.thisPrecision = Precision;
+                                    var objectValue = ( JObject )snakDataValue[ "value" ];
+                                    thisClaimData.Qcode = ( int )objectValue[ "numeric-id" ];
+                                    thisClaimData.ValueAsString = this._cache.RetrieveLabel( thisClaimData.Qcode );
                                 }
-                            }
-                            else if (SnakDataType == "monolingualtext")
-                            {
-                                var ObjectValue = (JObject)SnakDataValue["value"];
-                                string ValueText = (string)ObjectValue["text"];
-                                string ValueLanguage = (string)ObjectValue["language"];
-                                // TODO Multi language handling
-                                ThisClaimData.ValueAsString = ValueText + "(" + ValueLanguage + ")";
-                            }
-                            else if (SnakDataType == "quantity")
-                            {
-                                var ObjectValue = (JObject)SnakDataValue["value"];
-                                string ValueAmount = (string)ObjectValue["amount"];
-                                string ValueUnit = (string)ObjectValue["unit"];
-                                string ValueUpper = (string)ObjectValue["upperBound"];
-                                string ValueLower = (string)ObjectValue["lowerBound"];
+                                break;
 
-                                ThisClaimData.ValueAsString = "(" + ValueLower + " to " + ValueUpper + ") Unit " + ValueUnit;
-                            }
+                            case "time":
+                                {
+                                    var objectValue = ( JObject )snakDataValue[ "value" ];
+
+                                    var valueTime = ( string )objectValue[ "time" ];
+
+                                    var valueTimePrecision = ( string )objectValue[ "precision" ];
+                                    var valueTimeCalendarModel = ( string )objectValue[ "calendarmodel" ];
+
+                                    var julian = false;
+                                    var gregorian = false;
+
+                                    if ( valueTimeCalendarModel != "http://www.Wikidata.org/entity/Q1985727" ) {
+                                        gregorian = true;
+                                    }
+                                    if ( valueTimeCalendarModel == "http://www.Wikidata.org/entity/Q1985786" ) {
+                                        julian = true;
+                                    }
+
+                                    if ( valueTimePrecision == "11" || valueTimePrecision == "10" || valueTimePrecision == "9" || valueTimePrecision == "8" || valueTimePrecision == "7" || valueTimePrecision == "6" ) {
+                                        var dateStart = valueTime.IndexOf( "-", 2 ) - 4;
+
+                                        var thisDateString = ( valueTime.Substring( dateStart, 10 ) );
+                                        thisDateString = thisDateString.Replace( "-00", "-01" ); // Occasionally get 1901-00-00 ?
+
+                                        var validDate = true;
+                                        DateTime thisDate;
+                                        try {
+                                            thisDate = DateTime.Parse( thisDateString, null, DateTimeStyles.RoundtripKind );
+                                        }
+                                        catch {
+                                            thisDate = DateTime.MinValue;
+                                            validDate = false;
+                                        }
+                                        if ( julian && valueTimePrecision == "11" ) {
+
+                                            // All dates will be Gregorian Julian flag tells us to
+                                            // display Julian date. JulianCalendar JulCal = new
+                                            // JulianCalendar(); DateTime dta =
+                                            // JulCal.ToDateTime(thisDate.Year, thisDate.Month,
+                                            // thisDate.Day, 0, 0, 0, 0); thisDate = dta;
+                                        }
+
+                                        var precision = DatePrecision.Null;
+
+                                        if ( validDate == false ) {
+                                            precision = DatePrecision.Invalid;
+                                        }
+                                        else if ( valueTime.Substring( 0, 1 ) == "+" ) {
+                                            switch ( valueTimePrecision ) {
+                                                case "11":
+                                                    precision = DatePrecision.Day;
+                                                    break;
+
+                                                case "10":
+                                                    precision = DatePrecision.Month;
+                                                    break;
+
+                                                case "9":
+                                                    precision = DatePrecision.Year;
+                                                    break;
+
+                                                case "8":
+                                                    precision = DatePrecision.Decade;
+                                                    break;
+
+                                                case "7":
+                                                    precision = DatePrecision.Century;
+                                                    break;
+
+                                                case "6":
+                                                    precision = DatePrecision.Millenium;
+                                                    break;
+                                            }
+                                        }
+                                        else {
+                                            precision = DatePrecision.Bce;
+                                        }
+
+                                        thisClaimData.ValueAsDateTime.ThisDate = thisDate;
+                                        thisClaimData.ValueAsDateTime.ThisPrecision = precision;
+                                    }
+                                }
+                                break;
+
+                            case "monolingualtext":
+                                {
+                                    var objectValue = ( JObject )snakDataValue[ "value" ];
+                                    var valueText = ( string )objectValue[ "text" ];
+                                    var valueLanguage = ( string )objectValue[ "language" ];
+
+                                    // TODO Multi language handling
+                                    thisClaimData.ValueAsString = valueText + "(" + valueLanguage + ")";
+                                }
+                                break;
+
+                            case "quantity":
+                                {
+                                    var objectValue = ( JObject )snakDataValue[ "value" ];
+                                    var valueAmount = ( string )objectValue[ "amount" ];
+                                    var valueUnit = ( string )objectValue[ "unit" ];
+                                    var valueUpper = ( string )objectValue[ "upperBound" ];
+                                    var valueLower = ( string )objectValue[ "lowerBound" ];
+
+                                    thisClaimData.ValueAsString = "(" + valueLower + " to " + valueUpper + ") Unit " + valueUnit;
+                                }
+                                break;
                         }
-                        Fields.Claims.Add(new KeyValuePair<int, WikidataClaim>(Convert.ToInt32(ClaimKey.Substring(1)), ThisClaimData));
-                   }
+                    }
+                    this.Fields.Claims.Add( new KeyValuePair<int, WikidataClaim>( Convert.ToInt32( claimKey.Substring( 1 ) ), thisClaimData ) );
                 }
             }
             return true;

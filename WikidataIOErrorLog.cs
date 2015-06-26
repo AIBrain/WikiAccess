@@ -1,29 +1,24 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+﻿namespace WikiAccess {
 
-namespace WikiAccess
-{
-    public class WikidataIOErrorLog : ErrorLog
-    {
-        public string Module {get {return "D";}}
-        public List<ErrorMessage> Errors { get; set; }
+    using System.Collections.Generic;
 
-        public WikidataIOErrorLog()
-        {
+    public class WikidataIOErrorLog : IErrorLog {
+
+        public WikidataIOErrorLog() {
+
+            // ReSharper disable once UseObjectOrCollectionInitializer
             Errors = new List<ErrorMessage>();
 #if DEBUG
-            Errors.Add(new ErrorMessage(Module, 0, "WikidataIO module"));
+            Errors.Add( new ErrorMessage( Module, 0, "WikidataIO module" ) );
 #endif
         }
 
-        public void UnableToRetrieveData()
-        {
-            Errors.Add(new ErrorMessage(Module,1,"Unable to retrieve data"));
+        public string Module => "D";
+
+        public List<ErrorMessage> Errors {
+            get; set;
         }
 
-      
-    
+        public void UnableToRetrieveData() => this.Errors.Add( new ErrorMessage( this.Module, 1, "Unable to retrieve data" ) );
     }
 }

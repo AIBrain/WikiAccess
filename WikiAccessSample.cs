@@ -1,94 +1,81 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+﻿namespace WikiAccess {
 
-namespace WikiAccess
-{
-    class WikiAccessSample
-    {
-        static void Main(string[] args)
-        {
-            int Qcode = 15818798; 
+    using System;
+    using System.Collections.Generic;
+    using System.Linq;
 
-            WikidataIO WIO = new WikidataIO();
-            WIO.Action = "wbgetentities";
-            WIO.Format = "json";
-            WIO.Sites = "";
-            WIO.Ids = Qcode;
-            WIO.Props = "claims|descriptions|labels|sitelinks";
-            WIO.Languages = "";
-            WIO.ClaimsRequired = new string[5] { "P31", "P27", "P21", "P569", "P570" };
+    internal class WikiAccessSample {
 
-            WikidataFields Fields = WIO.GetData();
+        private static void Main( string[] args ) {
+            var qcode = 15818798;
 
-            Console.WriteLine("-----Errors-----");
-            List<ErrorLog> Errors = new List<ErrorLog>();
-            Errors = WIO.GetErrors();
+            var wio = new WikidataIO {
+                Action = "wbgetentities",
+                Format = "json",
+                Sites = "",
+                Ids = qcode,
+                Props = "claims|descriptions|labels|sitelinks",
+                Languages = "",
+                ClaimsRequired = new[] { "P31", "P27", "P21", "P569", "P570" }
+            };
 
-            foreach (ErrorLog thisLog in Errors)
-            {
-                if (thisLog != null)
-                {
-                    foreach (ErrorMessage Error in thisLog.Errors)
-                    {
-                        Console.WriteLine(Error.ToString());
-                    }
-                }
+            var fields = wio.GetData();
+
+            Console.WriteLine( "-----Errors-----" );
+            var errors = new List<IErrorLog>( wio.GetErrors() );
+
+            foreach ( var error in errors.Where( thisLog => thisLog != null ).SelectMany( thisLog => thisLog.Errors ) ) {
+                Console.WriteLine( error.ToString() );
             }
 
-
-            if (Fields == null)
+            if ( fields == null ) {
                 return;
-
-            string ThisName;
-            if (!Fields.Labels.TryGetValue("en-gb", out ThisName))
-                Fields.Labels.TryGetValue("en", out ThisName);
-
-            string ThisDescription;
-            if (!Fields.Description.TryGetValue("en-gb", out ThisDescription))
-                Fields.Description.TryGetValue("en", out ThisDescription);
-
-            string ThisWikipedia;
-                Fields.WikipediaLinks.TryGetValue("enwiki", out ThisWikipedia);
-
-            Console.WriteLine(ThisName);
-            Console.WriteLine(ThisDescription);
-
-            Console.WriteLine("====================");
-
-
-            WikipediaIO WPIO = new WikipediaIO();
-            WPIO.Action = "query";
-            WPIO.Export = "Yes";
-            WPIO.ExportNoWrap = "Yes";
-            WPIO.Format = "xml";
-            WPIO.Redirects = "yes";
-            WPIO.Titles = ThisWikipedia;
-
-            if (WPIO.GetData())
-            {
-                List<string[]> Templates = WPIO.TemplatesUsed;
-                List<string> Categories = WPIO.CategoriesUsed;
-
-                Console.WriteLine(WPIO.PageTitle);
-                Console.WriteLine(Templates.Count().ToString() + " templates");
-                Console.WriteLine(Categories.Count().ToString() + " categories");
             }
 
-            List<ErrorLog> Errors2 = new List<ErrorLog>();
-            Errors2 = WPIO.GetErrors();
-
-            foreach (ErrorLog thisLog in Errors2)
-            {
-                if (thisLog != null)
-                {
-                    foreach (ErrorMessage Error in thisLog.Errors)
-                    {
-                        Console.WriteLine(Error.ToString());
-                    }
-                }
+            string thisName;
+            if ( !fields.Labels.TryGetValue( "en-gb", out thisName ) ) {
+                fields.Labels.TryGetValue( "en", out thisName );
             }
+
+            string thisDescription;
+            if ( !fields.Description.TryGetValue( "en-gb", out thisDescription ) ) {
+                fields.Description.TryGetValue( "en", out thisDescription );
+            }
+
+            string thisWikipedia;
+            fields.WikipediaLinks.TryGetValue( "enwiki", out thisWikipedia );
+
+            Console.WriteLine( thisName );
+            Console.WriteLine( thisDescription );
+
+            Console.WriteLine( "====================" );
+
+            var wpio = new WikipediaIO {
+                Action = "query",
+                Export = "Yes",
+                ExportNoWrap = "Yes",
+                Format = "xml",
+                Redirects = "yes",
+                Titles = thisWikipedia
+            };
+
+            if ( wpio.GetData() ) {
+                var templates = wpio.TemplatesUsed;
+                var categories = wpio.CategoriesUsed;
+
+                Console.WriteLine( wpio.PageTitle );
+                Console.WriteLine( templates.Count() + " templates" );
+                Console.WriteLine( categories.Count() + " categories" );
+            }
+
+            var errors2 = new List<IErrorLog>( wpio.GetErrors() );
+
+            foreach ( var error in errors2.Where( thisLog => thisLog != null ).SelectMany( thisLog => thisLog.Errors ) ) {
+                Console.WriteLine( error.ToString() );
+            }
+
+            Console.WriteLine( "Press enter to exit." );
+            Console.ReadLine();
         }
     }
 }
